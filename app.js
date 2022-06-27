@@ -73,7 +73,25 @@ app.post('/messages', async (req,res) =>{
         res.send(201);
 
     } catch (error) {
-        return res.status(422).send("Erro ao enviar mensagem, entre em contato com a nossa equipe de suporte");
+        return res.sendStatus(422).send("Erro ao enviar mensagem, entre em contato com a nossa equipe de suporte");
+    }
+})
+
+app.post("/status", async(req,res) => {
+    const {user} = req.headers;
+
+    try {
+        const participantExists = await db.collection("participants").findOne({name: user});
+        if(!participantExists) {
+            return res.sendStatus(404);
+        }
+
+        await db.collection("participants").updateOne({name: user}, {$set: {lastStatus: Date.now()}});
+        res.sendStatus(200);
+
+    } catch (e) {
+        console.log("Falha ao atualizar status ", e);
+        res.sendStatus(500);
     }
 })
 
@@ -116,6 +134,33 @@ app.get('/messages', async (req,res) => {
     }
 
 })
+
+const TIMEOUT_CHECK_IDLE = 15*1000;
+setInterval(async () => {
+    const seconds = Date.now() - (10*1000);
+
+        try {
+            const idleParticipants = await db.collection("participants").find({lastStatus: {$lte: seconds}}).toArray();
+            if(idleParticipants.length > 0) {
+                const timeoutMessage = idleParticipants.map(idleUser => {
+                    return {
+                        from: idleUser.name,
+                        to: "Todos",
+                        text: "sai da sala...",
+                        type: "status",
+                        time: dayjs().format("HH:mm:ss")
+                    }
+                });
+            
+            await db.collection("messages").insertMany(timeoutMessage);
+            await db.collection("participants").deleteMany({lastStatus: {$lte: seconds}})
+
+            }
+        } catch (e) {
+            console.log("Falha ao remover os usuários inativos", e);
+        }
+}, TIMEOUT_CHECK_IDLE)
+    
 
 const port = process.env.PORT || 5000;
 app.listen(port, () => {
