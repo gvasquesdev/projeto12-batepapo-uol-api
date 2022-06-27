@@ -46,6 +46,51 @@ app.post('/participants', async (req,res) => {
     }
 })
 
+app.post('/messages', async (req,res) =>{
+    const {user} = req.headers;
+    const message = req.body;
+
+    const messageSchema = joi.object({
+        to: joi.string().required(),
+        text: joi.string().required(),
+        type: joi.string().valid("message","private_message").required()
+    })
+    const {error} = messageSchema.validate(message, {abortEarly: false});
+
+    if (error) {
+        return res.status(422).send(error.details.map(detail => detail.message));
+    }
+
+    try {
+        const findParticipant = await db.collection("participants").findOne({name: user})
+
+        if(!findParticipant) {
+            return res.sendStatus(422);
+        }
+
+        const {to,text,type} = message;
+        await db.collection("messages").insertOne({from: user, to, text, type, time: dayjs().format('HH:mm:ss')});
+        res.send(201);
+
+    } catch (error) {
+        return res.status(422).send("Erro ao enviar mensagem, entre em contato com a nossa equipe de suporte");
+    }
+})
+
+app.get('/participants', async (req,res) =>{
+    try {
+        const allparticipants = await db.collection("participants").find().toArray();
+        res.send(allparticipants);
+    } catch (e) {
+        console.log(e);
+        return res.status(500).send("Erro ao obter lista de participantes. Tente novamente ou contate o nosso suporte ", e);
+    }
+})
+
+app.get('/messages' async (req,res) => {
+    
+})
+
 const port = process.env.PORT || 5000;
 app.listen(port, () => {
     console.log(chalk.green("Server successfully connected!"));
