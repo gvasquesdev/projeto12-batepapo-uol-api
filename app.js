@@ -87,8 +87,34 @@ app.get('/participants', async (req,res) =>{
     }
 })
 
-app.get('/messages' async (req,res) => {
-    
+app.get('/messages', async (req,res) => {
+    const limit = parseInt(req.query.limit);
+    const {user} = req.headers;
+
+    try {
+        const loadedMessages = await db.collection("messages").find().toArray();
+        const filteredMessages =  loadedMessages.filter(message => {
+            const {from, to, type} = message;
+            const toUser = to === "Todos" || (to === user || from === user);
+            const isPublic = type === "message";
+
+            return toUser || isPublic;
+
+            
+        })
+
+        if(limit && limit !== NaN) {
+           return res.send(filteredMessages.slice(-limit));
+        }
+
+        res.send (filteredMessages);
+    } catch (e) {
+        console.log("Falha ao obter mensagens", e);
+        res.sendStatus(500);
+
+        
+    }
+
 })
 
 const port = process.env.PORT || 5000;
